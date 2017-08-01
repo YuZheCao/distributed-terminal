@@ -1,8 +1,3 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 package cn.esoule.distributed.terminal.core.nio.server;
 
 import java.io.IOException;
@@ -14,30 +9,26 @@ import java.util.Iterator;
 
 /**
  *
- * @author caoxin1
+ * @author yuzhecao@foxmail.com
  */
 public class AcceptDispatcher extends Dispatcher {
 
-    private int readBufferSize;
-    private int writeBufferSize;
-    private boolean block;
     private NioServer nioServer;
+    private Configure configure;
 
-    public AcceptDispatcher(String name, int readBufferSize, int writeBufferSize, boolean block, NioServer nioServer) throws IOException {
+    public AcceptDispatcher(String name, Configure configure, NioServer nioServer) throws IOException {
         super(name);
-        this.readBufferSize = readBufferSize;
-        this.writeBufferSize = writeBufferSize;
-        this.block = block;
+        this.configure = configure;
         this.nioServer = nioServer;
     }
 
     public final void accept(SelectionKey key) throws IOException {
         ServerSocketChannel serverSocketChannel = (ServerSocketChannel) key.channel();
         SocketChannel socketChannel = serverSocketChannel.accept();
-        socketChannel.configureBlocking(block);
+        socketChannel.configureBlocking(configure.isBlock());
         IODispatcher ioDispatcher = nioServer.getIODispatcher();
-        Connection connection = new Connection(socketChannel, ioDispatcher, readBufferSize, writeBufferSize);
-        ioDispatcher.register(socketChannel, SelectionKey.OP_READ, connection);
+        Session session = new Session(socketChannel, ioDispatcher, configure);
+        ioDispatcher.register(socketChannel, SelectionKey.OP_READ, session);
     }
 
     @Override

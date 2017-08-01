@@ -1,8 +1,3 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 package cn.esoule.distributed.terminal.core.nio.server;
 
 import java.io.IOException;
@@ -15,11 +10,11 @@ import org.slf4j.LoggerFactory;
 
 /**
  *
- * @author caoxin1
+ * @author yuzhecao@foxmail.com
  */
-public class Connection {
+public class Session {
 
-    private static final Logger logger = LoggerFactory.getLogger(Connection.class);
+    private static final Logger logger = LoggerFactory.getLogger(Session.class);
     protected boolean closed; // 关闭套接字管道
     protected final Object guard = new Object();
     private IODispatcher ioDispatcher;
@@ -33,13 +28,13 @@ public class Connection {
     public final ByteBuffer writeBuffer;
     private Object object;
 
-    public Connection(SocketChannel socketChannel, IODispatcher ioDispatcher, int readBufferSize, int writeBufferSize) {
+    public Session(SocketChannel socketChannel, IODispatcher ioDispatcher, Configure configure) {
         this.socketChannel = socketChannel;
         this.ioDispatcher = ioDispatcher;
-        writeBuffer = ByteBuffer.allocate(writeBufferSize);
+        writeBuffer = ByteBuffer.allocate(configure.getWriteBufferSize());
         writeBuffer.flip();
         writeBuffer.order(ByteOrder.LITTLE_ENDIAN);
-        readBuffer = ByteBuffer.allocate(readBufferSize);
+        readBuffer = ByteBuffer.allocate(configure.getReadBufferSize());
         readBuffer.order(ByteOrder.LITTLE_ENDIAN);
         this.ip = socketChannel.socket().getInetAddress().getHostAddress();
     }

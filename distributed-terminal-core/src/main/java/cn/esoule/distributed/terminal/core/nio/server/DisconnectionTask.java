@@ -10,9 +10,9 @@ package cn.esoule.distributed.terminal.core.nio.server;
  */
 public class DisconnectionTask implements Runnable {
 
-    private final Connection connection;
+    private final Session connection;
 
-    public DisconnectionTask(Connection connection) {
+    public DisconnectionTask(Session connection) {
         this.connection = connection;
     }
 

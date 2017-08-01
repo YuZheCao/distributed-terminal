@@ -1,8 +1,3 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 package cn.esoule.distributed.terminal.core.nio.server;
 
 import java.io.IOException;
@@ -20,13 +15,13 @@ import java.util.concurrent.TimeUnit;
 
 /**
  *
- * @author caoxin1
+ * @author yuzhecao@foxmail.com
  */
 public class IODispatcher extends Dispatcher {
 
     private final ScheduledExecutorService dcPool;
     private final ExecutorService workersThreadPool;
-    private final List<Connection> pendingClose = new ArrayList<Connection>();
+    private final List<Session> pendingClose = new ArrayList<Session>();
 
     public IODispatcher(String name, ScheduledExecutorService dcPool, ExecutorService workersThreadPool) throws IOException {
         super(name);
@@ -71,7 +66,7 @@ public class IODispatcher extends Dispatcher {
      * @param att
      * @throws IOException
      */
-    public final void register(SelectableChannel ch, int ops, Connection att)
+    public final void register(SelectableChannel ch, int ops, Session att)
             throws IOException {
         synchronized (gate) {
             selector.wakeup();
@@ -81,8 +76,8 @@ public class IODispatcher extends Dispatcher {
 
     private void read(SelectionKey key) throws IOException {
         SocketChannel socketChannel = (SocketChannel) key.channel();
-        Connection con = (Connection) key.attachment();
-        ByteBuffer rb = con.readBuffer;
+        Session session = (Session) key.attachment();
+        ByteBuffer rb = session.readBuffer;
         int numRead;
         try {
             numRead = socketChannel.read(rb);
@@ -99,19 +94,19 @@ public class IODispatcher extends Dispatcher {
         rb.flip();
         rb.mark();
         while (rb.remaining() > 2 && rb.remaining() >= rb.getShort(rb.position())) { // 读取是否为一个整包（也可能大于一个整包（多个包），因此这里会使用循环）
-            if (!parse(con, rb)) { // 判断包是否合法
+            if (!parse(session, rb)) { // 判断包是否合法
                 socketChannel.close();
                 return;
             }
         }
         if (rb.hasRemaining()) {
-            con.readBuffer.compact(); // 将缓冲区的当前位置和界限之间的字节复制到缓冲区的开始处（为下一个包准备）
+            session.readBuffer.compact(); // 将缓冲区的当前位置和界限之间的字节复制到缓冲区的开始处（为下一个包准备）
         } else {
             rb.clear();
         }
     }
 
-    private boolean parse(Connection con, ByteBuffer buf) {
+    private boolean parse(Session session, ByteBuffer buf) {
         short sz = 0;
         try {
             buf.reset();
@@ -122,27 +117,27 @@ public class IODispatcher extends Dispatcher {
             ByteBuffer b = (ByteBuffer) buf.slice().limit(sz); // 创建新的缓冲区
             b.order(ByteOrder.LITTLE_ENDIAN); // 小端模式，高字节存储在高地址
             buf.position(buf.position() + sz); // 写一个包数据开始处
-            return con.processData(b);
+            return session.processData(b);
         } catch (IllegalArgumentException e) {
-            logger.warn("Error on parsing input from client - account: " + con + " packet size: " + sz + " real size:" + buf.remaining() + e.getMessage());
+            logger.warn("Error on parsing input from client - account: " + session + " packet size: " + sz + " real size:" + buf.remaining() + e.getMessage());
             return false;
         }
     }
 
     private void write(SelectionKey key) {
         SocketChannel socketChannel = (SocketChannel) key.channel();
-        Connection con = (Connection) key.attachment();
+        Session session = (Session) key.attachment();
         int numWrite;
-        ByteBuffer wb = con.writeBuffer;
+        ByteBuffer wb = session.writeBuffer;
         if (wb.hasRemaining()) {
             try {
                 numWrite = socketChannel.write(wb);
             } catch (IOException e) {
-                closeConnectionImpl(con);
+                closeConnectionImpl(session);
                 return;
             }
             if (numWrite == 0) {
-                logger.info("Write " + numWrite + " ip: " + con.getIP());
+                logger.info("Write " + numWrite + " ip: " + session.getIP());
                 return;
             }
             if (wb.hasRemaining()) { // 不能被写的数据
@@ -151,7 +146,7 @@ public class IODispatcher extends Dispatcher {
         }
         while (true) {
             wb.clear();
-            boolean writeFailed = !con.writeData(wb);
+            boolean writeFailed = !session.writeData(wb);
             if (writeFailed) {
                 wb.limit(0);
                 break;
@@ -159,11 +154,11 @@ public class IODispatcher extends Dispatcher {
             try {
                 numWrite = socketChannel.write(wb);
             } catch (IOException e) {
-                closeConnectionImpl(con);
+                closeConnectionImpl(session);
                 return;
             }
             if (numWrite == 0) {
-                logger.info("Write " + numWrite + " ip: " + con.getIP());
+                logger.info("Write " + numWrite + " ip: " + session.getIP());
                 return;
             }
             if (wb.hasRemaining()) { // 不能被写的数据
@@ -171,8 +166,8 @@ public class IODispatcher extends Dispatcher {
             }
         }
         key.interestOps(key.interestOps() & ~SelectionKey.OP_WRITE);
-        if (con.isPendingClose()) {
-            closeConnectionImpl(con);
+        if (session.isPendingClose()) {
+            closeConnectionImpl(session);
         }
     }
 
@@ -181,13 +176,13 @@ public class IODispatcher extends Dispatcher {
      *
      * @param con
      */
-    public void closeConnection(Connection con) {
+    public void closeConnection(Session con) {
         synchronized (pendingClose) {
             pendingClose.add(con);
         }
     }
 
-    private void closeConnectionImpl(Connection con) {
+    private void closeConnectionImpl(Session con) {
         if (con.closeSocketChannel()) {
             dcPool.schedule(new DisconnectionTask(con), con.getDisconnectionDelay(), TimeUnit.MICROSECONDS);
         }
